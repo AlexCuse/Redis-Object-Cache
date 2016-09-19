@@ -1,11 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
 using System.Runtime.Caching;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using StackExchange.Redis;
 
 namespace RedisObjectCache
@@ -17,35 +13,14 @@ namespace RedisObjectCache
         private const DefaultCacheCapabilities CAPABILITIES = DefaultCacheCapabilities.AbsoluteExpirations
                                                               | DefaultCacheCapabilities.SlidingExpirations;
 
-         // static holder for instance, need to use lambda to construct since constructor private
-        private static readonly Lazy<RedisCache> _instance = new Lazy<RedisCache>(() => new RedisCache());
-        public static RedisCache Default
-        {
-            get { return _instance.Value; }
-        }
-
         private static readonly TimeSpan OneYear = new TimeSpan(365, 0, 0, 0);
         private readonly RedisCacheStore _store;
 
         private int _disposed;
         private bool IsDisposed { get { return (_disposed == 1); } }
 
-        private RedisCache()
+        public RedisCache(IDatabase database)
         {
-            var connectionSettings = RedisCacheConfiguration.Instance.Connection;
-
-            var configurationOptions = new ConfigurationOptions
-            {
-                EndPoints = {{ connectionSettings.Host, connectionSettings.Port }},
-                ConnectTimeout = connectionSettings.ConnectionTimeoutInMilliseconds,
-                Password = connectionSettings.AccessKey,
-                Ssl = connectionSettings.Ssl,
-                SyncTimeout = connectionSettings.OperationTimeoutInMilliseconds
-
-            };
-
-            var redis = ConnectionMultiplexer.Connect(configurationOptions);
-            var database = redis.GetDatabase(RedisCacheConfiguration.Instance.Connection.DatabaseId);
             _store = new RedisCacheStore(database);
         }
 
