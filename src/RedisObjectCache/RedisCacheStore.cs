@@ -15,10 +15,15 @@ namespace RedisObjectCache
         {
             _redisDatabase = redisDatabase;
 
+            var redisJsonContractResolver = new RedisJsonContractResolver();
+
+            //http://stackoverflow.com/a/13278092/794
+            redisJsonContractResolver.IgnoreSerializableAttribute = true;
+
             _jsonSerializerSettings = new JsonSerializerSettings()
             {
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                ContractResolver = new RedisJsonContractResolver()
+                ContractResolver = redisJsonContractResolver
             };
         }
 
