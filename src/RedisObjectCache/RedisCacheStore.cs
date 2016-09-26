@@ -23,7 +23,8 @@ namespace RedisObjectCache
             _jsonSerializerSettings = new JsonSerializerSettings()
             {
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                ContractResolver = redisJsonContractResolver
+                ContractResolver = redisJsonContractResolver,
+                TypeNameHandling = TypeNameHandling.All
             };
         }
 
