@@ -24,7 +24,7 @@ namespace RedisObjectCache
             {
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
                 ContractResolver = redisJsonContractResolver,
-                TypeNameHandling = TypeNameHandling.All
+                TypeNameHandling = TypeNameHandling.Objects
             };
         }
 
@@ -74,7 +74,7 @@ namespace RedisObjectCache
             if (string.IsNullOrEmpty(valueJson))
                 return null;
 
-            var value = JsonConvert.DeserializeObject(valueJson);
+            var value = JsonConvert.DeserializeObject(valueJson, _jsonSerializerSettings);
 
             _redisDatabase.KeyDelete(redisCacheKey.Key);
             _redisDatabase.KeyDelete(redisCacheKey.StateKey);
