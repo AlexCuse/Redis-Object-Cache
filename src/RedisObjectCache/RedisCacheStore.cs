@@ -89,10 +89,10 @@ namespace RedisObjectCache
 
         private object GetObjectFromString(string json, string typeName)
         {
-            MethodInfo method = typeof(JsonConvert).GetMethods().FirstOrDefault(m => m.Name == "DeserializeObject" && m.IsGenericMethod);
+            MethodInfo method = typeof(JsonConvert).GetMethods().Where(m => m.Name == "DeserializeObject" && m.IsGenericMethod).ElementAt(2);
             var t = Type.GetType(typeName);
             MethodInfo genericMethod = method.MakeGenericMethod(t);
-            return genericMethod.Invoke(null, new object[]{ json }); // No target, no arguments
+            return genericMethod.Invoke(null, new object[]{ json, _jsonSerializerSettings }); // No target, no arguments
         }
     }
 }
