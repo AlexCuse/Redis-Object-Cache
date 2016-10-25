@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Caching;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 
@@ -10,6 +11,7 @@ namespace RedisObjectCache
     {
         private readonly IDatabase _redisDatabase;
         private readonly JsonSerializerSettings _jsonSerializerSettings;
+        private readonly MemoryCache _bufferCache;
 
         internal RedisCacheStore(IDatabase redisDatabase)
         {
@@ -26,6 +28,8 @@ namespace RedisObjectCache
                 ContractResolver = redisJsonContractResolver,
                 TypeNameHandling = TypeNameHandling.Objects
             };
+
+            _bufferCache = MemoryCache.Default;
         }
 
         internal object Set(RedisCacheEntry entry)
@@ -38,6 +42,8 @@ namespace RedisObjectCache
             _redisDatabase.StringSet(entry.Key, valueJson, ttl);
             _redisDatabase.StringSet(entry.StateKey, stateJson, ttl);
 
+            _bufferCache.Add(entry.Key, entry.Value, BufferOffset(entry.State));
+
             return entry.Value;
         }
 
@@ -45,17 +51,33 @@ namespace RedisObjectCache
         {
             var redisCacheKey = new RedisCacheKey(key);
 
-            var stateJson = _redisDatabase.StringGet(redisCacheKey.StateKey);
-            if (string.IsNullOrEmpty(stateJson))
-                return null;
+            var value = _bufferCache.Get(key);
 
-            var valueJson = _redisDatabase.StringGet(redisCacheKey.Key);
+            var stateJson = _redisDatabase.StringGet(redisCacheKey.StateKey);
+            
+            if (string.IsNullOrEmpty(stateJson))
+            {
+                if (value != null)
+                {
+                    _bufferCache.Remove(key); //redis should be the truth
+                }
+                return null;
+            }
+
             var state = JsonConvert.DeserializeObject<RedisCacheEntryState>(stateJson);
 
-            var value = GetObjectFromString(valueJson, state.TypeName);
+            if (value == null) //TODO: deal with sliding if value found in buffer
+            {
+                var valueJson = _redisDatabase.StringGet(redisCacheKey.Key);
+
+                value = GetObjectFromString(valueJson, state.TypeName);
+
+                _bufferCache.Set(key, value, BufferOffset(state));
+            }
 
             if (state.IsSliding)
             {
+                //ignore buffer cache here - let it time out naturally
                 state.UpdateUsage();
                 stateJson = JsonConvert.SerializeObject(state, _jsonSerializerSettings);
 
@@ -79,6 +101,8 @@ namespace RedisObjectCache
             _redisDatabase.KeyDelete(redisCacheKey.Key);
             _redisDatabase.KeyDelete(redisCacheKey.StateKey);
 
+            _bufferCache.Remove(key);
+
             return value;
         }
 
@@ -93,6 +117,18 @@ namespace RedisObjectCache
             var t = Type.GetType(typeName);
             MethodInfo genericMethod = method.MakeGenericMethod(t);
             return genericMethod.Invoke(null, new object[]{ json, _jsonSerializerSettings }); // No target, no arguments
+        }
+
+        private DateTimeOffset BufferOffset(RedisCacheEntryState state)
+        {
+            var stateExpiration = state.UtcAbsoluteExpiration;
+            var defaultBufferExpiration = DateTimeOffset.UtcNow.AddHours(1);
+
+            if (stateExpiration > defaultBufferExpiration)
+            {
+                return defaultBufferExpiration;
+            }
+            return stateExpiration;
         }
     }
 }
