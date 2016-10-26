@@ -42,8 +42,6 @@ namespace RedisObjectCache
             _redisDatabase.StringSet(entry.Key, valueJson, ttl);
             _redisDatabase.StringSet(entry.StateKey, stateJson, ttl);
 
-            _bufferCache.Add(entry.Key, entry.Value, BufferOffset(entry.State));
-
             return entry.Value;
         }
 
@@ -51,7 +49,7 @@ namespace RedisObjectCache
         {
             var redisCacheKey = new RedisCacheKey(key);
 
-            var value = _bufferCache.Get(key);
+            var value = _bufferCache.Get(redisCacheKey.Key);
 
             var stateJson = _redisDatabase.StringGet(redisCacheKey.StateKey);
             
@@ -72,7 +70,7 @@ namespace RedisObjectCache
 
                 value = GetObjectFromString(valueJson, state.TypeName);
 
-                _bufferCache.Set(key, value, BufferOffset(state));
+                _bufferCache.Set(redisCacheKey.Key, value, BufferOffset(state));
             }
 
             if (state.IsSliding)
