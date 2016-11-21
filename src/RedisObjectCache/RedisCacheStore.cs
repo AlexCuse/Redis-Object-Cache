@@ -94,7 +94,18 @@ namespace RedisObjectCache
             if (string.IsNullOrEmpty(valueJson))
                 return null;
 
-            var value = JsonConvert.DeserializeObject(valueJson, _jsonSerializerSettings);
+            object value;
+
+            try
+            {
+                value = JsonConvert.DeserializeObject(valueJson, _jsonSerializerSettings);
+            }
+            catch
+            {
+                //this sucks, but we need to be able to evict if an object that can't be deserialized is placed in the cache
+                //AFAIK we are never using the return value of Remove anyway so should not cause problems (famous last words)
+                value = null;
+            }
 
             _redisDatabase.KeyDelete(redisCacheKey.Key);
             _redisDatabase.KeyDelete(redisCacheKey.StateKey);
