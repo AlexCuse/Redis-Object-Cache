@@ -10,12 +10,13 @@ namespace RedisObjectCache
     internal sealed class RedisCacheStore
     {
         private readonly IDatabase _redisDatabase;
+        private readonly IRedisCacheOptions _redisCacheOptions;
         private readonly JsonSerializerSettings _jsonSerializerSettings;
-        private readonly MemoryCache _bufferCache;
-
-        internal RedisCacheStore(IDatabase redisDatabase)
+        private readonly IBufferCache _bufferCache;
+        internal RedisCacheStore(IDatabase redisDatabase, IRedisCacheOptions redisCacheOptions)
         {
             _redisDatabase = redisDatabase;
+            _redisCacheOptions = redisCacheOptions;
 
             var redisJsonContractResolver = new RedisJsonContractResolver();
 
@@ -29,7 +30,7 @@ namespace RedisObjectCache
                 TypeNameHandling = TypeNameHandling.Objects
             };
 
-            _bufferCache = MemoryCache.Default;
+            _bufferCache = new BufferCache(redisCacheOptions);
         }
 
         internal object Set(RedisCacheEntry entry)
@@ -58,8 +59,8 @@ namespace RedisObjectCache
                 _bufferCache.Remove(key); //redis should be the 
                 return null;
             }
-
-            var bufferValue = _bufferCache.Get(redisCacheKey.Key) as BufferCacheEntry;
+            
+            var bufferValue = _bufferCache.Get(redisCacheKey.Key);
 
             var state = JsonConvert.DeserializeObject<RedisCacheEntryState>(stateJson);
 
@@ -69,15 +70,7 @@ namespace RedisObjectCache
 
                 value = GetObjectFromString(valueJson, state.TypeName);
 
-                if (ShouldBuffer(redisCacheKey.Key))
-                {
-                    _bufferCache.Set(redisCacheKey.Key, new BufferCacheEntry { Created = state.UtcCreated, Value = value },
-                        BufferOffset(state));
-                }
-                else
-                {
-                    _bufferCache.Remove(key);//this is potentially redundant but want to make sure it is removed if buffer value is stale
-                }
+                _bufferCache.Set(redisCacheKey.Key, state, value);
             }
             else
             {
@@ -137,23 +130,6 @@ namespace RedisObjectCache
             var t = Type.GetType(typeName);
             MethodInfo genericMethod = method.MakeGenericMethod(t);
             return genericMethod.Invoke(null, new object[]{ json, _jsonSerializerSettings }); // No target, no arguments
-        }
-
-        private bool ShouldBuffer(string key)
-        {
-            return !key.EndsWith(RedisCache.SKIP_BUFFER_KEY_ENDING);
-        }
-
-        private DateTimeOffset BufferOffset(RedisCacheEntryState state)
-        {
-            var stateExpiration = state.UtcAbsoluteExpiration;
-            var defaultBufferExpiration = DateTimeOffset.UtcNow.AddHours(1);
-
-            if (stateExpiration > defaultBufferExpiration)
-            {
-                return defaultBufferExpiration;
-            }
-            return stateExpiration;
         }
     }
 }

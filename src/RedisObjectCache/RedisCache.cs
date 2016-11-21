@@ -21,9 +21,9 @@ namespace RedisObjectCache
         private int _disposed;
         private bool IsDisposed { get { return (_disposed == 1); } }
 
-        public RedisCache(IDatabase database)
+        public RedisCache(IDatabase database, IRedisCacheOptions redisCacheOptions)
         {
-            _store = new RedisCacheStore(database);
+            _store = new RedisCacheStore(database, redisCacheOptions);
         }
 
         public override object AddOrGetExisting(string key, object value, CacheItemPolicy policy, string regionName = null)
