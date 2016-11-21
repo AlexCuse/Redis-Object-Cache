@@ -84,6 +84,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BufferCacheEntry.cs" />
     <Compile Include="RedisCacheEntry.cs" />
     <Compile Include="RedisCacheKey.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -47,30 +47,41 @@ namespace RedisObjectCache
 
         internal object Get(string key)
         {
-            var redisCacheKey = new RedisCacheKey(key);
+            object value;
 
-            var value = _bufferCache.Get(redisCacheKey.Key);
+            var redisCacheKey = new RedisCacheKey(key);
 
             var stateJson = _redisDatabase.StringGet(redisCacheKey.StateKey);
             
             if (string.IsNullOrEmpty(stateJson))
             {
-                if (value != null)
-                {
-                    _bufferCache.Remove(key); //redis should be the truth
-                }
+                _bufferCache.Remove(key); //redis should be the 
                 return null;
             }
 
+            var bufferValue = _bufferCache.Get(redisCacheKey.Key) as BufferCacheEntry;
+
             var state = JsonConvert.DeserializeObject<RedisCacheEntryState>(stateJson);
 
-            if (value == null) //TODO: deal with sliding if value found in buffer
+            if (bufferValue == null || bufferValue.Created < state.UtcCreated)
             {
                 var valueJson = _redisDatabase.StringGet(redisCacheKey.Key);
 
                 value = GetObjectFromString(valueJson, state.TypeName);
 
-                _bufferCache.Set(redisCacheKey.Key, value, BufferOffset(state));
+                if (ShouldBuffer(redisCacheKey.Key))
+                {
+                    _bufferCache.Set(redisCacheKey.Key, new BufferCacheEntry { Created = state.UtcCreated, Value = value },
+                        BufferOffset(state));
+                }
+                else
+                {
+                    _bufferCache.Remove(key);//this is potentially redundant but want to make sure it is removed if buffer value is stale
+                }
+            }
+            else
+            {
+                value = bufferValue.Value;
             }
 
             if (state.IsSliding)
@@ -126,6 +137,11 @@ namespace RedisObjectCache
             var t = Type.GetType(typeName);
             MethodInfo genericMethod = method.MakeGenericMethod(t);
             return genericMethod.Invoke(null, new object[]{ json, _jsonSerializerSettings }); // No target, no arguments
+        }
+
+        private bool ShouldBuffer(string key)
+        {
+            return !key.EndsWith(RedisCache.SKIP_BUFFER_KEY_ENDING);
         }
 
         private DateTimeOffset BufferOffset(RedisCacheEntryState state)

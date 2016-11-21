@@ -8,6 +8,8 @@ namespace RedisObjectCache
 {
     public class RedisCache : ObjectCache, IDisposable
     {
+        public const string SKIP_BUFFER_KEY_ENDING = "RedisObjectCache_SkipBuffer";
+
         private const string REGION_NOT_SUPPORTED = "Region not supported";
 
         private const DefaultCacheCapabilities CAPABILITIES = DefaultCacheCapabilities.AbsoluteExpirations
